@@ -1,0 +1,14 @@
+# Environment & Secrets
+.env
+.env.local
+
+# User uploads
+uploads/evidence/*
+!uploads/evidence/.htaccess
+
+# OS / IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
