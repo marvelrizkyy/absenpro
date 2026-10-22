@@ -19,9 +19,12 @@ $employeeId = (int)$user['id'];
 $stmtSet = $db->query("SELECT * FROM work_settings WHERE id = 1");
 $settings = $stmtSet->fetch() ?: [
     'check_in_deadline' => '08:00:00',
+    'check_out_time' => '17:00:00',
     'company_name' => 'PT Inovasi Digital Nusantara'
 ];
 $deadlineTime = substr($settings['check_in_deadline'], 0, 5);
+$checkOutTarget = substr($settings['check_out_time'] ?? '17:00:00', 0, 5);
+$isBeforeCheckOut = (date('H:i:s') < ($settings['check_out_time'] ?? '17:00:00'));
 
 // Check today's attendance
 $stmtAtt = $db->prepare("SELECT * FROM attendances WHERE employee_id = ? AND attendance_date = ? LIMIT 1");
@@ -122,16 +125,29 @@ require_once __DIR__ . '/views/layouts/top_navbar.php';
                 <form action="<?= BASE_URL ?>/actions/do_attendance.php" method="POST" id="formCheckOut">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="check_out">
-                    <button type="button" class="punch-circle-btn btn-out" onclick="if(confirm('Catat Check-Out kepulangan Anda sekarang?')) document.getElementById('formCheckOut').submit();">
-                        <div class="punch-btn-icon">
-                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2">
-                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                                <polyline points="16 17 21 12 16 7"></polyline>
-                                <line x1="21" y1="12" x2="9" y2="12"></line>
-                            </svg>
-                        </div>
-                        <span class="punch-btn-label">CLOCK OUT</span>
-                    </button>
+                    <?php if ($isBeforeCheckOut): ?>
+                        <button type="button" class="punch-circle-btn btn-out" onclick="openModal('earlyCheckOutModal')" title="Pulang Sebelum Jam <?= $checkOutTarget ?> WIB (Wajib Mengisi Alasan & Bukti)">
+                            <div class="punch-btn-icon">
+                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                    <polyline points="16 17 21 12 16 7"></polyline>
+                                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                                </svg>
+                            </div>
+                            <span class="punch-btn-label">CLOCK OUT</span>
+                        </button>
+                    <?php else: ?>
+                        <button type="button" class="punch-circle-btn btn-out" onclick="if(confirm('Catat Check-Out kepulangan Anda sekarang?')) document.getElementById('formCheckOut').submit();">
+                            <div class="punch-btn-icon">
+                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                    <polyline points="16 17 21 12 16 7"></polyline>
+                                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                                </svg>
+                            </div>
+                            <span class="punch-btn-label">CLOCK OUT</span>
+                        </button>
+                    <?php endif; ?>
                 </form>
 
             <?php else: ?>
@@ -148,7 +164,7 @@ require_once __DIR__ . '/views/layouts/top_navbar.php';
         <!-- Location Pin Subtext -->
         <div class="punch-location-info">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-            <span>Lokasi: Kantor Pusat &bull; Batas Masuk: <strong><?= $deadlineTime ?> WIB</strong></span>
+            <span>Masuk: <strong><?= $deadlineTime ?> WIB</strong> &bull; Pulang: <strong><?= $checkOutTarget ?> WIB</strong></span>
         </div>
 
         <!-- 3-Column Micro-Stats Row (Clock In, Clock Out, Working Status) -->
@@ -266,6 +282,45 @@ require_once __DIR__ . '/views/layouts/top_navbar.php';
         <?php endif; ?>
     </div>
 
+</div>
+
+<!-- Modal Konfirmasi Pulang Sebelum Jam Kerja Standar -->
+<div id="earlyCheckOutModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 440px;">
+        <div class="modal-header">
+            <h3 class="modal-title" style="color: #F43F5E; display: flex; align-items: center; gap: 8px;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                Pulang Sebelum Jam Kerja
+            </h3>
+            <button type="button" class="modal-close-btn" onclick="closeModal('earlyCheckOutModal')">&times;</button>
+        </div>
+
+        <div style="background: #FFF1F2; border: 1px solid #FECDD3; border-radius: var(--radius-md); padding: 14px; margin-bottom: 18px; font-size: 0.82rem; color: #9F1239; line-height: 1.5;">
+            Jam pulang kantor standar adalah pukul <strong><?= $checkOutTarget ?> WIB</strong>.<br>
+            Waktu saat ini masih pukul <strong><?= date('H:i') ?> WIB</strong>. Untuk dapat melakukan absensi kepulangan lebih awal, Anda <strong>wajib mengisi alasan keperluan dan melampirkan berkas bukti</strong> (surat izin atasan / dokumen pendukung).
+        </div>
+
+        <form action="<?= BASE_URL ?>/actions/do_attendance.php" method="POST" enctype="multipart/form-data">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="check_out">
+
+            <div class="form-group">
+                <label for="early_leave_reason" class="form-label required">Alasan Pulang Lebih Awal</label>
+                <textarea id="early_leave_reason" name="early_leave_reason" class="form-control" placeholder="Tuliskan alasan izin keperluan mendesak atau tugas luar kantor..." required></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="early_leave_evidence" class="form-label required">Lampiran Bukti (Foto / Surat / Dokumen)</label>
+                <input type="file" id="early_leave_evidence" name="early_leave_evidence" class="form-control" accept=".jpg,.jpeg,.png,.pdf" required>
+                <div class="form-hint">Maksimal 2 MB (Foto/PDF surat tugas, izin atasan, atau surat keterangan dokter).</div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 22px;">
+                <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="closeModal('earlyCheckOutModal')">Batal</button>
+                <button type="submit" class="btn btn-danger" style="flex: 2;">Konfirmasi Pulang</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <?php

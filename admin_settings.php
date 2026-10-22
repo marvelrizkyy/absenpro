@@ -27,6 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'update_settings') {
         $checkInDeadline = trim($_POST['check_in_deadline'] ?? '08:00:00');
+        $checkOutTime = trim($_POST['check_out_time'] ?? '17:00:00');
         $companyName = trim($_POST['company_name'] ?? 'PT Inovasi Digital Nusantara');
         $adminPhone = trim($_POST['admin_phone'] ?? '081234567890');
         $workDaysArray = $_POST['work_days'] ?? ['1','2','3','4','5','6'];
@@ -36,30 +37,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (strlen($checkInDeadline) === 5) {
             $checkInDeadline .= ':00';
         }
+        if (strlen($checkOutTime) === 5) {
+            $checkOutTime .= ':00';
+        }
 
         // Update database work_settings
         $stmt = $db->prepare("UPDATE work_settings SET 
             check_in_deadline = ?, 
+            check_out_time = ?,
             work_days = ?, 
             company_name = ?, 
             admin_phone = ?, 
             updated_by = ?, 
             updated_at = NOW() 
             WHERE id = 1");
-        $stmt->execute([$checkInDeadline, $workDaysStr, $companyName, $adminPhone, $adminId]);
+        $stmt->execute([$checkInDeadline, $checkOutTime, $workDaysStr, $companyName, $adminPhone, $adminId]);
 
-        // Save Fonnte token to .env file securely
-        if (!empty($fonnteToken)) {
-            $envPath = BASE_PATH . '/.env';
-            if (file_exists($envPath)) {
-                $envContent = file_get_contents($envPath);
+        // Save Fonnte token & Admin Phone to .env file securely
+        $envPath = BASE_PATH . '/.env';
+        if (file_exists($envPath)) {
+            $envContent = file_get_contents($envPath);
+            if (!empty($fonnteToken)) {
                 if (preg_match('/^FONNTE_TOKEN=.*$/m', $envContent)) {
                     $envContent = preg_replace('/^FONNTE_TOKEN=.*$/m', "FONNTE_TOKEN={$fonnteToken}", $envContent);
                 } else {
                     $envContent .= "\nFONNTE_TOKEN={$fonnteToken}\n";
                 }
-                file_put_contents($envPath, $envContent);
             }
+            if (!empty($adminPhone)) {
+                if (preg_match('/^ADMIN_PHONE=.*$/m', $envContent)) {
+                    $envContent = preg_replace('/^ADMIN_PHONE=.*$/m', "ADMIN_PHONE={$adminPhone}", $envContent);
+                } else {
+                    $envContent .= "\nADMIN_PHONE={$adminPhone}\n";
+                }
+            }
+            file_put_contents($envPath, $envContent);
         }
 
         flash_set('success', 'Pengaturan operasional jam kerja dan sistem berhasil diperbarui.');
@@ -127,14 +139,20 @@ require_once __DIR__ . '/views/layouts/top_navbar.php';
                 <div class="form-group">
                     <label for="check_in_deadline" class="form-label required">Batas Jam Masuk Tepat Waktu</label>
                     <input type="time" id="check_in_deadline" name="check_in_deadline" step="1" class="form-control" value="<?= substr($settings['check_in_deadline'], 0, 5) ?>" required>
-                    <div class="form-hint">Presensi setelah jam ini otomatis berstatus Terlambat.</div>
+                    <div class="form-hint">Presensi masuk setelah jam ini otomatis berstatus Terlambat.</div>
                 </div>
 
                 <div class="form-group">
-                    <label for="admin_phone" class="form-label required">Nomor WhatsApp Admin</label>
-                    <input type="text" id="admin_phone" name="admin_phone" class="form-control" value="<?= clean_input($settings['admin_phone']) ?>" placeholder="081234567890" required>
-                    <div class="form-hint">Menerima alert pendaftaran baru, keterlambatan, dan izin.</div>
+                    <label for="check_out_time" class="form-label required">Jam Pulang Kerja Standar</label>
+                    <input type="time" id="check_out_time" name="check_out_time" step="1" class="form-control" value="<?= substr($settings['check_out_time'] ?? '17:00:00', 0, 5) ?>" required>
+                    <div class="form-hint">Absen pulang sebelum jam ini wajib mengisi alasan & bukti.</div>
                 </div>
+            </div>
+
+            <div class="form-group">
+                <label for="admin_phone" class="form-label required">Nomor WhatsApp Admin</label>
+                <input type="text" id="admin_phone" name="admin_phone" class="form-control" value="<?= clean_input($settings['admin_phone']) ?>" placeholder="081234567890" required>
+                <div class="form-hint">Menerima alert presensi, keterlambatan, pulang awal, izin, dan seluruh tembusan notifikasi.</div>
             </div>
 
             <div class="form-group">

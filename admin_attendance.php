@@ -250,6 +250,20 @@ require_once __DIR__ . '/views/layouts/top_navbar.php';
                             </td>
                             <td>
                                 <?= ($att && !empty($att['check_out'])) ? format_time($att['check_out']) : '-' ?>
+                                <?php if ($att && !empty($att['is_early_leave']) && $att['is_early_leave'] == 1): ?>
+                                    <div style="margin-top: 4px;">
+                                        <span class="badge badge-warning" title="Alasan: <?= clean_input($att['early_leave_reason'] ?? '') ?>">
+                                            ⚠️ Pulang Awal (<?= (int)$att['early_leave_minutes'] ?>m)
+                                        </span>
+                                        <?php if (!empty($att['early_leave_evidence'])): ?>
+                                            <div style="margin-top: 3px;">
+                                                <a href="<?= BASE_URL ?>/uploads/evidence/<?= clean_input($att['early_leave_evidence']) ?>" target="_blank" style="font-size: 0.73rem; color: #4F46E5; font-weight: 700; text-decoration: underline;">
+                                                    📎 Lihat Bukti
+                                                </a>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endif; ?>
                             </td>
                             <td>
                                 <span class="badge <?= $row['badge_class'] ?>">

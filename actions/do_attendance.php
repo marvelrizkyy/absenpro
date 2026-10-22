@@ -56,10 +56,12 @@ if ($approvedLeave) {
 $stmtSet = $db->query("SELECT * FROM work_settings WHERE id = 1");
 $settings = $stmtSet->fetch() ?: [
     'check_in_deadline' => '08:00:00',
+    'check_out_time' => '17:00:00',
     'company_name' => 'PT Inovasi Digital Nusantara',
     'admin_phone' => '081234567890'
 ];
 $deadlineTime = $settings['check_in_deadline'];
+$checkOutTarget = $settings['check_out_time'] ?? '17:00:00';
 $companyName = $settings['company_name'];
 $adminPhone = $settings['admin_phone'];
 
@@ -139,20 +141,81 @@ if ($action === 'check_in') {
         exit;
     }
 
-    try {
-        $stmtUpdate = $db->prepare("UPDATE attendances SET check_out = ?, updated_at = NOW() WHERE id = ?");
-        $stmtUpdate->execute([$nowTime, $existingAtt['id']]);
+    // Periksa apakah kepulangan dilakukan sebelum jam pulang standar
+    $serverTimeObj = new DateTime($nowTime);
+    $checkOutObj = new DateTime($checkOutTarget);
+    $isEarlyLeave = 0;
+    $earlyLeaveMinutes = 0;
+    $earlyReason = null;
+    $evidencePath = null;
 
-        // Send WhatsApp check-out confirmation to employee
-        $userMsg = "👋 *NOTIFIKASI CHECK-OUT (PULANG)*\n\n"
-                 . "Halo {$user['nama_lengkap']},\n"
-                 . "Absensi pulang Anda telah berhasil dicatat pada sistem *{$companyName}*:\n\n"
-                 . "• *Tanggal:* " . format_indo_date($today) . "\n"
-                 . "• *Waktu Pulang:* " . date('H:i') . " WIB\n\n"
-                 . "Terima kasih atas dedikasi dan kerja keras Anda hari ini. Selamat beristirahat!";
+    if ($serverTimeObj < $checkOutObj) {
+        $isEarlyLeave = 1;
+        $diff = $checkOutObj->diff($serverTimeObj);
+        $earlyLeaveMinutes = ($diff->h * 60) + $diff->i;
+        if ($diff->s > 0) $earlyLeaveMinutes++;
+
+        $earlyReason = trim($_POST['early_leave_reason'] ?? '');
+        if (empty($earlyReason)) {
+            flash_set('danger', 'Anda melakukan presensi sebelum jam pulang kerja (' . substr($checkOutTarget, 0, 5) . ' WIB). Alasan pulang lebih awal wajib diisi.');
+            header('Location: ' . BASE_URL . '/employee_dashboard.php');
+            exit;
+        }
+
+        // Validasi lampiran bukti dokumen/surat
+        if (!isset($_FILES['early_leave_evidence']) || $_FILES['early_leave_evidence']['error'] !== UPLOAD_ERR_OK) {
+            flash_set('danger', 'Anda melakukan presensi sebelum jam pulang kerja. Bukti dokumen / surat / foto izin wajib dilampirkan.');
+            header('Location: ' . BASE_URL . '/employee_dashboard.php');
+            exit;
+        }
+
+        require_once __DIR__ . '/../helpers/upload_helper.php';
+        $uploadResult = upload_evidence($_FILES['early_leave_evidence']);
+        if (!$uploadResult['success']) {
+            flash_set('danger', 'Gagal mengunggah bukti pulang awal: ' . $uploadResult['error']);
+            header('Location: ' . BASE_URL . '/employee_dashboard.php');
+            exit;
+        }
+        $evidencePath = $uploadResult['filename'];
+    }
+
+    try {
+        $stmtUpdate = $db->prepare("UPDATE attendances SET 
+            check_out = ?, 
+            is_early_leave = ?, 
+            early_leave_minutes = ?, 
+            early_leave_reason = ?, 
+            early_leave_evidence = ?, 
+            updated_at = NOW() 
+            WHERE id = ?");
+        $stmtUpdate->execute([$nowTime, $isEarlyLeave, $earlyLeaveMinutes, $earlyReason, $evidencePath, $existingAtt['id']]);
+
+        // Kirim WhatsApp konfirmasi kepulangan ke karyawan & tembusan ke Admin
+        if ($isEarlyLeave === 1) {
+            $earlyNote = "\n• *Status Kepulangan:* Pulang Lebih Awal ({$earlyLeaveMinutes} Menit Sebelum Jam " . substr($checkOutTarget, 0, 5) . " WIB)"
+                       . "\n• *Alasan:* {$earlyReason}"
+                       . "\n• *Bukti Terlampir:* Ya (Tersimpan aman di sistem)";
+            $userMsg = "👋 *NOTIFIKASI CHECK-OUT (PULANG LEBIH AWAL)*\n\n"
+                     . "Halo {$user['nama_lengkap']},\n"
+                     . "Absensi kepulangan lebih awal Anda telah tercatat pada sistem *{$companyName}*:\n\n"
+                     . "• *Tanggal:* " . format_indo_date($today) . "\n"
+                     . "• *Waktu Pulang:* " . date('H:i') . " WIB"
+                     . "{$earlyNote}\n\n"
+                     . "Pengajuan pulang lebih awal Anda telah dilaporkan ke HR/Admin.";
+            $flashMsg = "Check-Out berhasil dicatat pada pukul {$nowTime} WIB (Pulang lebih awal {$earlyLeaveMinutes} menit). Selamat beristirahat!";
+        } else {
+            $userMsg = "👋 *NOTIFIKASI CHECK-OUT (PULANG)*\n\n"
+                     . "Halo {$user['nama_lengkap']},\n"
+                     . "Absensi pulang Anda telah berhasil dicatat pada sistem *{$companyName}*:\n\n"
+                     . "• *Tanggal:* " . format_indo_date($today) . "\n"
+                     . "• *Waktu Pulang:* " . date('H:i') . " WIB\n\n"
+                     . "Terima kasih atas dedikasi dan kerja keras Anda hari ini. Selamat beristirahat!";
+            $flashMsg = "Check-Out berhasil dicatat pada pukul {$nowTime} WIB. Selamat beristirahat!";
+        }
+
         send_whatsapp_notification($user['no_wa'], 'check_out_user', $userMsg, $employeeId);
 
-        flash_set('success', "Check-Out berhasil dicatat pada pukul {$nowTime} WIB. Selamat beristirahat!");
+        flash_set('success', $flashMsg);
     } catch (Exception $e) {
         flash_set('danger', 'Gagal memproses check-out: ' . $e->getMessage());
     }

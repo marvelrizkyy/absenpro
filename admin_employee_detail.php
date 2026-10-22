@@ -188,7 +188,21 @@ require_once __DIR__ . '/views/layouts/top_navbar.php';
                         <tr>
                             <td><strong><?= format_indo_date($att['attendance_date']) ?></strong></td>
                             <td><?= format_time($att['check_in']) ?></td>
-                            <td><?= format_time($att['check_out']) ?></td>
+                            <td>
+                                <?= format_time($att['check_out']) ?>
+                                <?php if (!empty($att['is_early_leave']) && $att['is_early_leave'] == 1): ?>
+                                    <div style="margin-top: 3px;">
+                                        <span class="badge badge-warning" title="Alasan: <?= clean_input($att['early_leave_reason'] ?? '') ?>">
+                                            Pulang Awal (<?= (int)$att['early_leave_minutes'] ?>m)
+                                        </span>
+                                        <?php if (!empty($att['early_leave_evidence'])): ?>
+                                            <a href="<?= BASE_URL ?>/uploads/evidence/<?= clean_input($att['early_leave_evidence']) ?>" target="_blank" style="font-size: 0.73rem; color: #4F46E5; margin-left: 4px; font-weight: 700; text-decoration: underline;">
+                                                [Bukti]
+                                            </a>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
                             <td>
                                 <?php if ($att['status'] === 'hadir_tepat_waktu'): ?>
                                     <span class="badge badge-success">Tepat Waktu</span>

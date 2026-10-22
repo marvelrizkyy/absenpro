@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS `users` (
 CREATE TABLE IF NOT EXISTS `work_settings` (
     `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     `check_in_deadline` TIME NOT NULL DEFAULT '08:00:00',
+    `check_out_time` TIME NOT NULL DEFAULT '17:00:00',
     `work_days` VARCHAR(50) NOT NULL DEFAULT '1,2,3,4,5,6',
     `company_name` VARCHAR(100) NOT NULL DEFAULT 'PT Inovasi Digital Nusantara',
     `admin_phone` VARCHAR(20) NOT NULL DEFAULT '081234567890',
@@ -46,6 +47,10 @@ CREATE TABLE IF NOT EXISTS `attendances` (
     `check_out` TIME DEFAULT NULL,
     `status` ENUM('hadir_tepat_waktu', 'terlambat') NOT NULL DEFAULT 'hadir_tepat_waktu',
     `late_minutes` INT NOT NULL DEFAULT 0,
+    `is_early_leave` TINYINT(1) NOT NULL DEFAULT 0,
+    `early_leave_minutes` INT NOT NULL DEFAULT 0,
+    `early_leave_reason` TEXT DEFAULT NULL,
+    `early_leave_evidence` VARCHAR(255) DEFAULT NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY `uk_emp_date` (`employee_id`, `attendance_date`),
